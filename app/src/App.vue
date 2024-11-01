@@ -1,49 +1,125 @@
 <template>
-  <div id="app">
+  <div id="app" class="container">
     <h1 class="title">{{ title }}</h1>
 
-    <div class="todo">
-      <input v-model="todo" type="text" placeholder="Task name" />
-      <input v-model="date" type="date" placeholder="Select date" />
-      <p></p>
+    <div class="box is-centered has-background-pink custom-box">
+      <div class="field is-grouped is-grouped-centered">
+        <div class="control">
+          <input
+            v-model="todo"
+            type="text"
+            placeholder="Название задачи"
+            class="input is-small"
+            style="max-width: 300px;"
+          />
+        </div>
+        <div class="control">
+          <input
+            v-model="category"
+            type="text"
+            placeholder="Категория"
+            class="input is-small"
+            style="max-width: 150px;"
+          />
+        </div>
+        <div class="control">
+          <input
+            v-model="date"
+            type="date"
+            placeholder="Дата задачи"
+            class="input is-small"
+            style="max-width: 150px;"
+          />
+        </div>
+        <div class="control">
+          <button @click="addTodo" class="button is-light is-small">Добавить</button>
+        </div>
+      </div>
 
-      <input v-model="category" type="text" placeholder="Category" />
-      <button @click="addTodo">Add Task</button>
       <hr />
 
       <div class="filters">
-        <input v-model="searchQuery" type="text" placeholder="Search by name or category" />
-        <p></p>
-        <input v-model="filterDate" type="date" placeholder="Filter by date" />
-        <p></p>
-        <select v-model="filterStatus">
-          <option value="">All</option>
-          <option value="completed">Completed</option>
-          <option value="notCompleted">Not Completed</option>
-        </select>
-        <label>
-          <input type="checkbox" v-model="filterWithoutDate" />
-          Без даты
-        </label>
+        <div class="field is-grouped is-grouped-centered">
+          <div class="control">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Поиск по названию или категории"
+              class="input is-small"
+              style="max-width: 200px;"
+            />
+          </div>
+          <div class="control">
+            <div class="select is-small">
+              <select v-model="filterCategory">
+                <option value="">Все категории</option>
+                <option v-for="cat in uniqueCategories" :key="cat" :value="cat">{{ cat }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="control">
+            <div class="select is-small">
+              <select v-model="filterStatus">
+                <option value="">Все</option>
+                <option value="completed">Выполненные</option>
+                <option value="notCompleted">Невыполненные</option>
+              </select>
+            </div>
+          </div>
+          <div class="control">
+            <input
+              v-model="filterDate"
+              type="date"
+              placeholder="Фильтр по дате"
+              class="input is-small"
+              style="max-width: 150px;"
+            />
+          </div>
+        </div>
       </div>
 
       <hr />
-      <div v-for="(todo, i) in filteredTodos" :key="todo.id">
-        <p>
-          <span class="todo__id">{{ i + 1 }}. </span>
-          <span
-            class="todo__text"
-            :class="{ todo__text__isShown: todo.isComplete }"
-          >
-            {{ todo.text }} - <em>{{ todo.category || 'No Category' }}</em>
-          </span>
-          <input v-model="todo.isComplete" class="todo__check" type="checkbox" @change="updateTodo(i)" />
-          <button @click="removeToDo(i)">Удалить</button>
-        </p>
-        <p class="todo__date">{{ todo.date || 'No Date' }}</p>
+
+      <div v-for="(todo, i) in filteredTodos" :key="todo.id" class="box">
+        <div class="columns is-vcentered">
+          <div class="column is-narrow">
+            <span>{{ i + 1 }}.</span>
+          </div>
+
+          <div class="column">
+            <span v-if="!todo.isEditing" class="todo__text" 
+              :class="{ 'has-text-grey-light': todo.isComplete }">
+                {{ todo.text }}
+            </span>
+            <div v-else>
+              <input v-model="todo.text" class="input is-small" />
+              <input v-model="todo.category" class="input is-small" />
+              <input v-model="todo.date" type="date" class="input is-small" />
+            </div>
+          </div>
+
+          <div class="column is-narrow">
+            <input
+              v-model="todo.isComplete"
+              type="checkbox"
+              class="checkbox"
+              @change="updateTodo"
+            />
+          </div>
+
+          <div class="column is-narrow">
+            <button @click="editTodo(todo)" class="button is-small is-light">{{ todo.isEditing ? 
+            'Сохранить' : 'Редактировать' }}</button>
+            <button @click="removeToDo(i)" class="button is-small is-danger">Удалить</button>
+          </div>
+        </div>
+
+        <div class="todo__info">
+          <span class="category">{{ todo.category }}</span> <span class="date">{{ todo.date }}</span>
+        </div>
       </div>
-      <hr />
-      <p class="todo__count">Tasks: {{ filteredTodos.length }}</p>
+
+      <p class="has-text-white">Задач: {{ filteredTodos.length }}</p>
     </div>
   </div>
 </template>
@@ -58,38 +134,43 @@ export default {
       category: "",
       todos: [],
       id: 0,
-      searchQuery: "",    // Для поиска по названию или категории
-      filterDate: "",     // Для фильтрации по дате
-      filterStatus: "",   // Для фильтрации по статусу
-      filterWithoutDate: false, // Для фильтрации задач без даты
+      searchQuery: "",
+      filterDate: "",
+      filterStatus: "",
+      filterCategory: "", 
     };
   },
+
+  //Вычисляемые свойства
   computed: {
+    uniqueCategories() {
+      const categories = this.todos.map(todo => todo.category).filter(Boolean);
+      return [...new Set(categories)];
+    },
+    
     filteredTodos() {
       return this.todos.filter((todo) => {
-        // Фильтр по названию задачи или категории
         const matchesQuery =
           this.searchQuery === "" ||
           todo.text.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
           (todo.category && todo.category.toLowerCase().includes(this.searchQuery.toLowerCase()));
 
-        // Фильтр по дате (если указана)
-        const matchesDate =
-          !this.filterDate || todo.date === this.filterDate;
+        const matchesCategory =
+          !this.filterCategory || todo.category === this.filterCategory;
 
-        // Фильтр по статусу выполнения задачи
+        const matchesDate =
+          !this.filterDate || todo.date === this.filterDate || (this.filterDate === "" && !todo.date);
+
         const matchesStatus =
           this.filterStatus === "" ||
           (this.filterStatus === "completed" && todo.isComplete) ||
           (this.filterStatus === "notCompleted" && !todo.isComplete);
 
-        // Фильтр по отсутствию даты
-        const matchesWithoutDate = !this.filterWithoutDate || !todo.date;
-
-        return matchesQuery && matchesDate && matchesStatus && matchesWithoutDate;
+        return matchesQuery && matchesCategory && matchesDate && matchesStatus;
       });
     },
   },
+
   async mounted() {
     const data = await localStorage.getItem("todos");
     if (data) {
@@ -97,6 +178,7 @@ export default {
       this.id = this.todos.length > 0 ? this.todos[this.todos.length - 1].id + 1 : 0;
     }
   },
+
   methods: {
     addTodo() {
       if (this.todo.trim() !== "") {
@@ -106,22 +188,29 @@ export default {
           date: this.date || null,
           category: this.category.trim() || null,
           isComplete: false,
+          isEditing: false, // Флаг редактирования
         });
-        this.saveTodos(); // Сохраняем в локальное хранилище
+        localStorage.setItem("todos", JSON.stringify(this.todos));
         this.todo = "";
         this.date = "";
         this.category = "";
       }
     },
-    updateTodo(index) {
-      // Просто вызываем saveTodos для обновления локального хранилища
-      this.saveTodos();
+
+    editTodo(todo) {
+      if (todo.isEditing) {
+        // Сохранить изменения
+        localStorage.setItem("todos", JSON.stringify(this.todos));
+      }
+      todo.isEditing = !todo.isEditing; // Переключить режим редактирования
     },
+
+    updateTodo() {
+      localStorage.setItem("todos", JSON.stringify(this.todos));
+    },
+
     removeToDo(index) {
       this.todos.splice(index, 1);
-      this.saveTodos();
-    },
-    saveTodos() {
       localStorage.setItem("todos", JSON.stringify(this.todos));
     },
   },
@@ -135,52 +224,40 @@ export default {
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .title {
-  color: #a84849;
+  color: #f14668; 
 }
 
-.todo {
-  width: 300px;
-  height: 100%;
-  text-align: center;
-  background: #a84848;
-  padding: 30px;
-  outline: 1px solid #2c3e50;
-  margin: 0 auto;
+.box.has-background-pink {
+  background-color: #ff5174; 
+}
 
-  &__id {
-    color: #ffffff;
-    font-weight: bold;
-  }
+.filters {
+  margin-bottom: 1.5rem;
+}
 
-  &__text {
-    font-size: 15px;
-    color: #ffffff;
-    text-transform: capitalize;
+.todo__date {
+  font-size: 13px;
+  color: #7a7a7a;
+}
 
-    &__isShown {
-      color: #cccccc;
-      text-decoration: line-through;
-    }
-  }
+.todo__info {
+  font-size: 0.9rem;
+  color: #7a7a7a;
+  text-transform: capitalize; 
+}
 
-  &__date {
-    display: block;
-    font-size: 13px;
-    color: #ddd;
-  }
+.custom-box {
+  width: 600px; /* Установите желаемую ширину */
+  margin: 0 auto; /* Центрирование box */
+}
 
-  &__check {
-    display: inline-block;
-    margin-left: 10px;
-  }
-
-  &__count {
-    color: #ffffff;
-    font-weight: bold;
-  }
+.category,
+.date {
+  display: inline; /* Категория и дата в одной строке */
 }
 </style>
